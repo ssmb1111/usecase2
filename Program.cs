@@ -1,4 +1,5 @@
 using Stripe;
+using System.Text.Json;
 using UseCase2;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,6 +14,13 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.Configure<StripeSettings>(configuration.GetSection("StripeSettings"));
 StripeConfiguration.ApiKey = configuration.GetSection("StripeSettings:ApiKey").Value;
+
+var jsonOptions = new JsonSerializerOptions
+{
+    PropertyNameCaseInsensitive = true,
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+};
+builder.Services.AddSingleton(jsonOptions);
 
 var app = builder.Build();
 

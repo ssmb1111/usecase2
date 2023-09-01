@@ -3,34 +3,44 @@ using Stripe;
 using System.Text.Json;
 using UseCase2.Models;
 
-[Route("api/[controller]")]
-[ApiController]
-public class StripeController : ControllerBase
+namespace UseCase2.Controllers
 {
-    [HttpGet("balance")]
-    public IActionResult GetBalance()
+    [Route("api/[controller]")]
+    [ApiController]
+    public class StripeController : ControllerBase
     {
-        try
-        {
-            var balanceService = new BalanceService();
-            var balance = balanceService.Get();
-            
-            // Extracting the stripeResponse.content
-            var content = balance.StripeResponse.Content;
+        private readonly JsonSerializerOptions _jsonOptions;
 
-            // Parse the content into our class
-            var parsedBalance = JsonSerializer.Deserialize<StripeBalanceResponse>(content);
-            return Ok(parsedBalance);
-        }
-        catch (StripeException e)
+        public StripeController(JsonSerializerOptions jsonOptions)
         {
-            // Handle Stripe-specific exceptions
-            return BadRequest(new { error = e.Message });
+            _jsonOptions = jsonOptions;
         }
-        catch (Exception ex)
+
+        [HttpGet("balance")]
+        public IActionResult GetBalance()
         {
-            // Handle general exceptions
-            return StatusCode(500, new { error = ex.Message });
+            try
+            {
+                var balanceService = new BalanceService();
+                var balance = balanceService.Get();
+
+                // Extracting the stripeResponse.content
+                var content = balance.StripeResponse.Content;
+
+                // Parse the content into our class
+                var parsedBalance = JsonSerializer.Deserialize<StripeBalanceResponse>(content, _jsonOptions);
+                return Ok(parsedBalance);
+            }
+            catch (StripeException e)
+            {
+                // Handle Stripe-specific exceptions
+                return BadRequest(new { error = e.Message });
+            }
+            catch (Exception ex)
+            {
+                // Handle general exceptions
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
     }
 }

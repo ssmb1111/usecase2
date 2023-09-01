@@ -42,5 +42,35 @@ namespace UseCase2.Controllers
                 return StatusCode(500, new { error = ex.Message });
             }
         }
+
+        [HttpGet("balance-transactions")]
+        public IActionResult GetBalanceTransactions([FromQuery] PaginationDto pagination)
+        {
+            var options = new BalanceTransactionListOptions
+            {
+                Limit = pagination.Limit,
+                StartingAfter = pagination.Offset
+            };
+
+            var service = new BalanceTransactionService();
+            StripeList<BalanceTransaction> balanceTransactions;
+
+            try
+            {
+                balanceTransactions = service.List(options);
+                var parsedBalanceTransactions = JsonSerializer.Deserialize<StripeBalanceTransactionsResponse>(balanceTransactions.StripeResponse.Content, _jsonOptions);
+                return Ok(parsedBalanceTransactions);
+            }
+            catch (StripeException e)
+            {
+                // Handle the exception appropriately (e.g., log it, return an error response, etc.)
+                return BadRequest(e.Message);
+            }
+            catch (Exception ex)
+            {
+                // Handle general exceptions
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
     }
 }

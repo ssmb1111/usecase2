@@ -21,6 +21,8 @@ var jsonOptions = new JsonSerializerOptions
     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
 };
 builder.Services.AddSingleton(jsonOptions);
+builder.Services.AddSingleton<BalanceService>();
+builder.Services.AddSingleton<BalanceTransactionService>();
 
 var app = builder.Build();
 

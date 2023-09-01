@@ -10,10 +10,14 @@ namespace UseCase2.Controllers
     public class StripeController : ControllerBase
     {
         private readonly JsonSerializerOptions _jsonOptions;
+        private readonly BalanceService _balanceService;
+        private readonly BalanceTransactionService _balanceTransactionService;
 
-        public StripeController(JsonSerializerOptions jsonOptions)
+        public StripeController(BalanceService balanceService, BalanceTransactionService balanceTransactionService, JsonSerializerOptions jsonOptions)
         {
             _jsonOptions = jsonOptions;
+            _balanceService = balanceService;
+            _balanceTransactionService = balanceTransactionService;
         }
 
         [HttpGet("balance")]
@@ -21,8 +25,7 @@ namespace UseCase2.Controllers
         {
             try
             {
-                var balanceService = new BalanceService();
-                var balance = balanceService.Get();
+                var balance = _balanceService.Get();
 
                 // Extracting the stripeResponse.content
                 var content = balance.StripeResponse.Content;
@@ -52,12 +55,11 @@ namespace UseCase2.Controllers
                 StartingAfter = pagination.Offset
             };
 
-            var service = new BalanceTransactionService();
             StripeList<BalanceTransaction> balanceTransactions;
 
             try
             {
-                balanceTransactions = service.List(options);
+                balanceTransactions = _balanceTransactionService.List(options);
                 var parsedBalanceTransactions = JsonSerializer.Deserialize<StripeBalanceTransactionsResponse>(balanceTransactions.StripeResponse.Content, _jsonOptions);
                 return Ok(parsedBalanceTransactions);
             }

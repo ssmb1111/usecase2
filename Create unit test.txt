@@ -1,0 +1,259 @@
+ME:
+Create unit tests for ASP.NET API endpoints for a controller provided below:
+[Route("api/[controller]")]
+    [ApiController]
+    public class StripeController : ControllerBase
+    {
+        private readonly JsonSerializerOptions _jsonOptions;
+
+        public StripeController(JsonSerializerOptions jsonOptions)
+        {
+            _jsonOptions = jsonOptions;
+        }
+
+        [HttpGet("balance")]
+        public IActionResult GetBalance()
+        {
+            try
+            {
+                var balanceService = new BalanceService();
+                var balance = balanceService.Get();
+
+                // Extracting the stripeResponse.content
+                var content = balance.StripeResponse.Content;
+
+                // Parse the content into our class
+                var parsedBalance = JsonSerializer.Deserialize<StripeBalanceResponse>(content, _jsonOptions);
+                return Ok(parsedBalance);
+            }
+            catch (StripeException e)
+            {
+                // Handle Stripe-specific exceptions
+                return BadRequest(new { error = e.Message });
+            }
+            catch (Exception ex)
+            {
+                // Handle general exceptions
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        [HttpGet("balance-transactions")]
+        public IActionResult GetBalanceTransactions([FromQuery] PaginationDto pagination)
+        {
+            var options = new BalanceTransactionListOptions
+            {
+                Limit = pagination.Limit,
+                StartingAfter = pagination.Offset
+            };
+
+            var service = new BalanceTransactionService();
+            StripeList<BalanceTransaction> balanceTransactions;
+
+            try
+            {
+                balanceTransactions = service.List(options);
+                var parsedBalanceTransactions = JsonSerializer.Deserialize<StripeBalanceTransactionsResponse>(balanceTransactions.StripeResponse.Content, _jsonOptions);
+                return Ok(parsedBalanceTransactions);
+            }
+            catch (StripeException e)
+            {
+                // Handle the exception appropriately (e.g., log it, return an error response, etc.)
+                return BadRequest(e.Message);
+            }
+            catch (Exception ex)
+            {
+                // Handle general exceptions
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+    }
+BalanceService and BalanceTransactionService are provided by Stripe.NET library.
+
+AI:
+To test the API endpoints for `StripeController`, we'll use xUnit, Moq, and Microsoft's ASP.NET Core TestHost libraries. Our strategy will be:
+
+1. Mock the services and inject them into the controller so we can simulate Stripe API responses without actually making calls to the Stripe API.
+2. Test for success scenarios and exceptions.
+
+I will create a basic unit test setup for the provided `StripeController`. However, keep in mind this won't be a comprehensive test and might require further adjustments based on actual project structure and requirements.
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using Stripe;
+using System.Text.Json;
+using Xunit;
+using YourNamespaceHere; // Ensure to replace this with your actual namespace
+
+public class StripeControllerTests
+{
+    private readonly Mock<BalanceService> _balanceServiceMock;
+    private readonly Mock<BalanceTransactionService> _balanceTransactionServiceMock;
+    private readonly JsonSerializerOptions _jsonOptions;
+
+    public StripeControllerTests()
+    {
+        _balanceServiceMock = new Mock<BalanceService>();
+        _balanceTransactionServiceMock = new Mock<BalanceTransactionService>();
+        _jsonOptions = new JsonSerializerOptions(); // Or whatever your setup requires
+    }
+
+    [Fact]
+    public void GetBalance_ReturnsOkResult_WhenSuccessful()
+    {
+        // Arrange
+        var fakeBalanceResponse = new Balance // Set up your mock Balance object
+        {
+            StripeResponse = new StripeResponse(HttpStatusCode.OK, null, "Your JSON content here")
+        };
+        _balanceServiceMock.Setup(s => s.Get()).Returns(fakeBalanceResponse);
+
+        var controller = new StripeController(_jsonOptions);
+
+        // Act
+        var result = controller.GetBalance();
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public void GetBalance_ReturnsBadRequest_WhenStripeExceptionOccurs()
+    {
+        // Arrange
+        _balanceServiceMock.Setup(s => s.Get()).Throws(new StripeException("Error"));
+
+        var controller = new StripeController(_jsonOptions);
+
+        // Act
+        var result = controller.GetBalance();
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public void GetBalanceTransactions_ReturnsOkResult_WhenSuccessful()
+    {
+        // Arrange
+        var fakeTransactionList = new StripeList<BalanceTransaction>
+        {
+            StripeResponse = new StripeResponse(HttpStatusCode.OK, null, "Your JSON content here for transaction list")
+        };
+        _balanceTransactionServiceMock.Setup(s => s.List(It.IsAny<BalanceTransactionListOptions>())).Returns(fakeTransactionList);
+
+        var controller = new StripeController(_jsonOptions);
+        
+        // Act
+        var result = controller.GetBalanceTransactions(new PaginationDto { Limit = 10, Offset = "offset_value" });
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    // Add more tests for different scenarios like 500 status, pagination, etc.
+}
+```
+
+Some key considerations:
+1. Ensure you have referenced all necessary NuGet packages like `Stripe.net`, `xUnit`, `Moq`, and `Microsoft.AspNetCore.TestHost`.
+2. In reality, you wouldn't want to mock the `BalanceService` and `BalanceTransactionService` classes directly since they come from an external library. Instead, you'd create interfaces for them, then make a wrapper around them in your codebase, and mock those interfaces in tests. 
+3. This example is quite basic. Depending on your real-world requirements and setup, you might want to cover more edge cases, different input variations, and potentially more complex scenarios.
+4. Error messages and other hardcoded strings should be extracted into constants or configuration files, especially if they need to be shared across different parts of the codebase.
+
+ME:
+Adjust code above to use MSTest.
+
+AI:
+Sure! Here's the adjusted code using MSTest instead of xUnit:
+
+1. First, ensure you've referenced the necessary NuGet packages: `Stripe.net`, `MSTest.TestFramework`, `MSTest.TestAdapter`, and `Moq`.
+
+2. The basic structure of the tests remains similar, but there are some differences in the attributes and assertions.
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+using Stripe;
+using System.Text.Json;
+using YourNamespaceHere; // Ensure to replace this with your actual namespace
+
+[TestClass]
+public class StripeControllerTests
+{
+    private readonly Mock<BalanceService> _balanceServiceMock;
+    private readonly Mock<BalanceTransactionService> _balanceTransactionServiceMock;
+    private readonly JsonSerializerOptions _jsonOptions;
+
+    public StripeControllerTests()
+    {
+        _balanceServiceMock = new Mock<BalanceService>();
+        _balanceTransactionServiceMock = new Mock<BalanceTransactionService>();
+        _jsonOptions = new JsonSerializerOptions(); // Or whatever your setup requires
+    }
+
+    [TestMethod]
+    public void GetBalance_ReturnsOkResult_WhenSuccessful()
+    {
+        // Arrange
+        var fakeBalanceResponse = new Balance // Set up your mock Balance object
+        {
+            StripeResponse = new StripeResponse(HttpStatusCode.OK, null, "Your JSON content here")
+        };
+        _balanceServiceMock.Setup(s => s.Get()).Returns(fakeBalanceResponse);
+
+        var controller = new StripeController(_jsonOptions);
+
+        // Act
+        var result = controller.GetBalance();
+
+        // Assert
+        Assert.IsInstanceOfType(result, typeof(OkObjectResult));
+    }
+
+    [TestMethod]
+    public void GetBalance_ReturnsBadRequest_WhenStripeExceptionOccurs()
+    {
+        // Arrange
+        _balanceServiceMock.Setup(s => s.Get()).Throws(new StripeException("Error"));
+
+        var controller = new StripeController(_jsonOptions);
+
+        // Act
+        var result = controller.GetBalance();
+
+        // Assert
+        Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+    }
+
+    [TestMethod]
+    public void GetBalanceTransactions_ReturnsOkResult_WhenSuccessful()
+    {
+        // Arrange
+        var fakeTransactionList = new StripeList<BalanceTransaction>
+        {
+            StripeResponse = new StripeResponse(HttpStatusCode.OK, null, "Your JSON content here for transaction list")
+        };
+        _balanceTransactionServiceMock.Setup(s => s.List(It.IsAny<BalanceTransactionListOptions>())).Returns(fakeTransactionList);
+
+        var controller = new StripeController(_jsonOptions);
+        
+        // Act
+        var result = controller.GetBalanceTransactions(new PaginationDto { Limit = 10, Offset = "offset_value" });
+
+        // Assert
+        Assert.IsInstanceOfType(result, typeof(OkObjectResult));
+    }
+
+    // Add more tests for different scenarios like 500 status, pagination, etc.
+}
+```
+
+The major differences include:
+
+1. Using the `[TestClass]` attribute to denote the test class.
+2. Using the `[TestMethod]` attribute before each individual test method.
+3. Using `Assert.IsInstanceOfType` for type-based assertions, instead of `Assert.IsType`.
